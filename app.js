@@ -27,11 +27,11 @@ app.configure('development', function(){
   app.use(express.errorHandler());
 });
 
-,
-
 app.locals({
     awsBucket: "TrailSitesProto"
 });
+
+app.use(express.bodyParser());
 
 //app.get('/', routes.index);
 app.post('/resource_downloader', routes.resourceDownloader);
