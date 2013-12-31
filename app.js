@@ -33,6 +33,11 @@ app.locals({
 
 app.use(express.bodyParser());
 
+//app.use(function(req, res, next) {
+//    res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000,http://www.webtrails.co");
+//    return next();
+//});
+
 //app.get('/', routes.index);
 app.post('/resource_downloader', routes.resourceDownloader);
 

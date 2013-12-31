@@ -3,9 +3,11 @@ AWS = require('aws-sdk');
 AWS.config.update({accessKeyId: process.env.AWS_KEY, secretAccessKey: process.env.AWS_SECRET});
 awsBucket = new AWS.S3({params: {Bucket: 'TrailsSitesProto'}});
 
-var pg = require('pg');
+console.log("db url is", process.env.DATABASE_URL);
 
+var pg = require('pg');
 var request = require('request');
+var url = require('url');
 
 exports.resourceDownloader = function(req, res){
 
@@ -16,6 +18,8 @@ exports.resourceDownloader = function(req, res){
     var site = new Site(req.body.siteID, function(site) {
         new ResourceHandler(req, site);
     });
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
 
     res.send({ message: 'success!' });
 };
@@ -32,8 +36,8 @@ ResourceHandler = function(req, site) {
     var callbackTracker = new CallbackTracker(Object.keys(resources).length, Object.keys(stylesheets).length, function() {
         console.log("is iframe?", isIframe, typeof isIframe);
         if (isIframe == "false") {
-            console.log("now setting the archive location of the site");
-            site.archiveLocation = absoluteAwsUrl(html[0]);
+            console.log("archive location is: " + site.archiveLocation);
+            console.log("now updating the site");
             site.revisionNumbers.push(revisionNumber);
             if (isBaseRevision == "true") site.baseRevisionNumber = parseInt(revisionNumber);
             site.updateSiteInDb();
@@ -103,9 +107,18 @@ ResourceHandler = function(req, site) {
         }
     }
 
-    var htmlPathWithRevision = html[0][-1] == "/" ? html[0] + revisionNumber : html[0] + "/" + revisionNumber;
+    var htmlPathWithRevision;
+    console.log("archive location is: " + site.archiveLocation);
+    if (html.awsPath){
+        htmlPathWithRevision = html.awsPath[-1] == "/" ? html.awsPath + revisionNumber : html.awsPath + "/" + revisionNumber;
+        site.archiveLocation = absoluteAwsUrl(html.awsPath);
+    } else {
+        var archivePath = url.parse(site.archiveLocation).pathname.replace(/\/TrailsSitesProto(\/)?/,"");
+        htmlPathWithRevision = archivePath  + "/" + revisionNumber;
+        console.log("not replacing archive location");
+    }
 
-    putDataOns3(htmlPathWithRevision, html[1], "text/html", function() {
+    putDataOns3(htmlPathWithRevision, html.html, "text/html", function() {
         callbackTracker.markHtmlAsSaved();
     });
 }
@@ -164,7 +177,7 @@ var Site  = function(id, onLoaded) {
         archive_location = $5\
     WHERE \
         id = $6\
-    "
+    ";
 
     var site;
     this.savedResources = [];
@@ -187,9 +200,6 @@ var Site  = function(id, onLoaded) {
             console.log("please set archive location and baseRevisionNumber and ensure correct types (string and int) before saving");
             console.log("archive location is: ", thisSite.archiveLocation);
             console.log("base revision number is: ", thisSite.baseRevisionNumber)
-            console.log("type of base revision number is: ", (typeof thisSite.baseRevisionNumber))
-            console.log("bool is: ", !(typeof thisSite.baseRevisionNumber) === "number");
-            console.log("bool2 is: ", !thisSite.archiveLocation);
         } else {
             makePgQuery(updateSiteStatement, queryParams, function(res) {
                 console.log("site with id:" + id + " updated successfully");
