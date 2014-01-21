@@ -59,6 +59,7 @@ ResourceHandler = function(req, site) {
                 });
             } else {
                 console.log("error downloading from: " + resourceUrl);
+                console.log(error.message);
                 callbackTracker.markResourceAsSaved();
             }
         })
