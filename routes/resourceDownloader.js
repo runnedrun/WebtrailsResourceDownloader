@@ -9,22 +9,47 @@ var pg = require('pg');
 var request = require('request');
 var url = require('url');
 
+function absoluteAwsUrl(path) {
+    var encodedPath = path.split("/").map(function(sect){ return encodeURIComponent(sect) }).join("/");
+    return "https://s3.amazonaws.com/TrailsSitesProto/" + encodedPath
+}
+
+function generateArchivePath(path, revisionNumber) {
+    return path[path.length-1] == "/" ? path + revisionNumber : path + "/" + revisionNumber;
+}
+
 exports.resourceDownloader = function(req, res){
-
-
     console.log("in the resource downloader");
-//    console.log(req);
 
-    var site = new Site(req.body.siteID, function(site) {
-        new ResourceHandler(req, site);
-    });
+    var auth_token = req.headers["WT_AUTH_TOKEN"] || req.cookies.wt_auth_token
 
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    console.log("auth_token is: " + auth_token);
 
-    res.send({ message: 'success!' });
+    if (auth_token){
+        var archiveBase = false;
+        var archivePath = false;
+        var resp;
+
+        if (req.body.html.awsPath){
+            archiveBase = absoluteAwsUrl(req.body.html.awsPath)
+            archivePath = generateArchivePath(req.body.html.awsPath, req.body.revision);
+            resp = { archive_location: absoluteAwsUrl(archivePath)};
+        } else {
+            resp = {}
+        }
+
+        new Site(req.body.siteID, auth_token, function(site) {
+            new ResourceHandler(req, site, archivePath, archiveBase);
+        });
+
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.send(resp);
+    } else {
+        res.send('not authorized for that operation', 404);
+    }
 };
 
-ResourceHandler = function(req, site) {
+ResourceHandler = function(req, site, archivePath, archiveBase) {
     var siteId = req.body.siteID;
     var resources = req.body.originalToAwsUrlMap || [];
     var stylesheets= req.body.styleSheets || [];
@@ -60,7 +85,7 @@ ResourceHandler = function(req, site) {
             } else {
                 console.log("error downloading from: " + resourceUrl);
                 if (error) console.log("error is: " + error.message);
-                console.log("status code is: " + response.statusCode);
+//                console.log("status code is: " + response.statusCode);
                 callbackTracker.markResourceAsSaved();
             }
         })
@@ -79,11 +104,6 @@ ResourceHandler = function(req, site) {
             }
             callback(data);
         })
-    }
-
-    function absoluteAwsUrl(path) {
-        var encodedPath = path.split("/").map(function(sect){ return encodeURIComponent(sect) }).join("/");
-        return "https://s3.amazonaws.com/TrailsSitesProto/" + encodedPath
     }
 
     for ( var path in stylesheets ) {
@@ -109,24 +129,26 @@ ResourceHandler = function(req, site) {
         }
     }
 
-    var htmlPathWithRevision;
     console.log("archive location is: " + site.archiveLocation);
-    if (html.awsPath){
-        htmlPathWithRevision = html.awsPath[-1] == "/" ? html.awsPath + revisionNumber : html.awsPath + "/" + revisionNumber;
-        site.archiveLocation = absoluteAwsUrl(html.awsPath);
+
+    if (archiveBase && archivePath){
+        site.archiveLocation = archiveBase
     } else {
-        var archivePath = url.parse(site.archiveLocation).pathname.replace(/\/TrailsSitesProto(\/)?/,"");
-        htmlPathWithRevision = archivePath  + "/" + revisionNumber;
-        console.log("not replacing archive location");
+        archivePath = url.parse(site.archiveLocation).pathname.replace(/\/TrailsSitesProto(\/)?/,"") + "/" + revisionNumber;
     }
 
-    putDataOns3(htmlPathWithRevision, html.html, "text/html", function() {
-        callbackTracker.markHtmlAsSaved();
-    });
+    callbackTracker.setSaveHtmlFunction(function(callback) {
+        putDataOns3(archivePath, html.html, "text/html", function() {
+            callback();
+        });
+    })
 }
 
+
+// Waits for all resources to be downloaded before saving the full html and
+// calling the given callback.
 CallbackTracker = function(resourcesRemaining, stylesheetsRemaining, callback) {
-    var htmlSaved = false;
+    var htmlSaveFunction = false;
 
     this.markResourceAsSaved = function() {
         resourcesRemaining -= 1;
@@ -138,8 +160,8 @@ CallbackTracker = function(resourcesRemaining, stylesheetsRemaining, callback) {
         checkIfMirroringIsComplete();
     };
 
-    this.markHtmlAsSaved = function() {
-        htmlSaved = true;
+    this.setSaveHtmlFunction = function(fn) {
+        htmlSaveFunction = fn;
         checkIfMirroringIsComplete();
     };
 
@@ -147,18 +169,17 @@ CallbackTracker = function(resourcesRemaining, stylesheetsRemaining, callback) {
         console.log("stylesheets remaining is:" + stylesheetsRemaining);
         console.log("resources remaining is:" + resourcesRemaining);
         console.log("htmlSaved is:" + htmlSaved);
-        if (stylesheetsRemaining <= 0 &&
-            resourcesRemaining <= 0 &&
-            htmlSaved == true) {
+        if (stylesheetsRemaining <= 0 && resourcesRemaining <= 0 && htmlSaveFunction) {
             console.log("mirroring complete");
-            callback();
+            htmlSaveFunction(callback);
         }
     }
 }
 
-var Site  = function(id, onLoaded) {
+var Site  = function(id, auth_token, onLoaded) {
     var selectSiteQuery = "\
-        SELECT \
+        SELECT DISTINCT \
+            trail_id\
             revision_numbers, \
             saved_stylesheets, \
             saved_resources,\
@@ -167,7 +188,15 @@ var Site  = function(id, onLoaded) {
         FROM \
             sites \
         WHERE \
-            id = $1";
+            id = $1\
+        AND\
+            user_id = ( \
+                SELECT DISTINCT id \
+                FROM users \
+                WHERE \
+                wt_authentication_token = $2\
+            )\
+        ";
 
     var updateSiteStatement = "\
     UPDATE sites \
@@ -179,6 +208,10 @@ var Site  = function(id, onLoaded) {
         archive_location = $5\
     WHERE \
         id = $6\
+    ";
+
+    var userId = "\
+   \
     ";
 
     var site;
@@ -210,11 +243,11 @@ var Site  = function(id, onLoaded) {
     };
 
     function loadSiteFromDb() {
-        makePgQuery(selectSiteQuery, [id], function(res) {
+        makePgQuery(selectSiteQuery, [id, auth_token], function(res) {
             site = res.rows[0];
             thisSite.savedResources = trimArray(site.saved_resources.split(","));
             thisSite.savedStylesheets = trimArray(site.saved_stylesheets.split(","));
-            thisSite.revisionNumbers = trimArray((site.revision_numbers || "").split(","));
+            thisSite.revisionNumbers = trimArray(String((site.revision_numbers) || "").split(","));
             thisSite.baseRevisionNumber = site.base_revision_number;
             thisSite.archiveLocation = site.archive_location;
 

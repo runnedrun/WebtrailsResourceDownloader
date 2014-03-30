@@ -15,6 +15,7 @@ app.configure(function(){
   app.set('port', process.env.PORT || 3000);
   app.set('views', __dirname + '/views');
   app.set('view engine', 'jade');
+  app.use(express.cookieParser());
   app.use(express.favicon());
   app.use(express.logger('dev'));
   app.use(express.bodyParser());
@@ -30,8 +31,6 @@ app.configure('development', function(){
 app.locals({
     awsBucket: "TrailSitesProto"
 });
-
-app.use(express.bodyParser());
 
 //app.use(function(req, res, next) {
 //    res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000,http://www.webtrails.co");
