@@ -168,23 +168,23 @@ CallbackTracker = function(resourcesRemaining, stylesheetsRemaining, callback) {
     function checkIfMirroringIsComplete() {
         console.log("stylesheets remaining is:" + stylesheetsRemaining);
         console.log("resources remaining is:" + resourcesRemaining);
-        console.log("htmlSaved is:" + htmlSaved);
         if (stylesheetsRemaining <= 0 && resourcesRemaining <= 0 && htmlSaveFunction) {
             console.log("mirroring complete");
             htmlSaveFunction(callback);
         }
     }
-}
+};
 
 var Site  = function(id, auth_token, onLoaded) {
     var selectSiteQuery = "\
         SELECT DISTINCT \
-            trail_id\
+            trail_id,\
             revision_numbers, \
             saved_stylesheets, \
             saved_resources,\
             base_revision_number,\
-            archive_location\
+            archive_location, \
+            id \
         FROM \
             sites \
         WHERE \
@@ -224,12 +224,14 @@ var Site  = function(id, auth_token, onLoaded) {
     var thisSite = this;
 
     this.updateSiteInDb = function() {
-        var queryParams = [thisSite.revisionNumbers.join(","),
+        var queryParams = [
+            thisSite.revisionNumbers.join(","),
             thisSite.savedStylesheets.join(","),
             thisSite.savedResources.join(","),
             thisSite.baseRevisionNumber,
             thisSite.archiveLocation,
-            id];
+            id
+        ];
 
         if (!((typeof thisSite.baseRevisionNumber) === "number") || !thisSite.archiveLocation) {
             console.log("please set archive location and baseRevisionNumber and ensure correct types (string and int) before saving");
@@ -247,7 +249,7 @@ var Site  = function(id, auth_token, onLoaded) {
             site = res.rows[0];
             thisSite.savedResources = trimArray(site.saved_resources.split(","));
             thisSite.savedStylesheets = trimArray(site.saved_stylesheets.split(","));
-            thisSite.revisionNumbers = trimArray(String((site.revision_numbers) || "").split(","));
+            thisSite.revisionNumbers = trimArray(site.revision_numbers.split(","));
             thisSite.baseRevisionNumber = site.base_revision_number;
             thisSite.archiveLocation = site.archive_location;
 
