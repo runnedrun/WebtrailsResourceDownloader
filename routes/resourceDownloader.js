@@ -21,7 +21,9 @@ function generateArchivePath(path, revisionNumber) {
 exports.resourceDownloader = function(req, res){
     console.log("in the resource downloader");
 
-    var auth_token = req.headers["WT_AUTH_TOKEN"] || req.cookies.wt_auth_token
+    debugger
+
+    var auth_token = req.headers["wt_auth_token"] || req.cookies.wt_auth_token
 
     console.log("auth_token is: " + auth_token);
 

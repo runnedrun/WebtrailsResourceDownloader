@@ -5,7 +5,22 @@ debug: node debug --port=5858
 
 start foreman with devel env vars: foreman start -e .env,devel.env
 
+proc for node inspector:
+web: node-inspector & node --debug app.js
+
+proc for prod:
+web: node app.js
+
 list tables: \d
 list dbs: \l
 show columns: \d table
 describe table: \d+ table
+
+
+launching to heroku:
+
+git push heroku master
+
+heroku ps:scale web=1
+
+http://gentle-atoll-5058.herokuapp.com/
