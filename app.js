@@ -33,12 +33,18 @@ app.locals({
 });
 
 //app.use(function(req, res, next) {
-//    res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000,http://www.webtrails.co");
+//
 //    return next();
 //});
 
 //app.get('/', routes.index);
 app.post('/resource_downloader', routes.resourceDownloader);
+app.options('/resource_downloader', function(req, res) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header("Access-Control-Allow-Headers", "ACCEPT, WT_AUTH_TOKEN, CONTENT-TYPE");
+    res.send("", 200);
+});
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log("Express server listening on port " + app.get('port'));

@@ -21,8 +21,7 @@ function generateArchivePath(path, revisionNumber) {
 exports.resourceDownloader = function(req, res){
     console.log("in the resource downloader");
 
-    debugger
-
+    debugger;
     var auth_token = req.headers["wt_auth_token"] || req.cookies.wt_auth_token
 
     console.log("auth_token is: " + auth_token);
@@ -45,7 +44,7 @@ exports.resourceDownloader = function(req, res){
         });
 
         res.setHeader("Access-Control-Allow-Origin", "*");
-        res.send(resp);
+        res.send(resp, 200);
     } else {
         res.send('not authorized for that operation', 404);
     }
@@ -249,13 +248,16 @@ var Site  = function(id, auth_token, onLoaded) {
     function loadSiteFromDb() {
         makePgQuery(selectSiteQuery, [id, auth_token], function(res) {
             site = res.rows[0];
-            thisSite.savedResources = trimArray(site.saved_resources.split(","));
-            thisSite.savedStylesheets = trimArray(site.saved_stylesheets.split(","));
-            thisSite.revisionNumbers = trimArray(site.revision_numbers.split(","));
-            thisSite.baseRevisionNumber = site.base_revision_number;
-            thisSite.archiveLocation = site.archive_location;
-
-            onLoaded(thisSite);
+            if (site) {
+                thisSite.savedResources = trimArray(site.saved_resources.split(","));
+                thisSite.savedStylesheets = trimArray(site.saved_stylesheets.split(","));
+                thisSite.revisionNumbers = trimArray(site.revision_numbers.split(","));
+                thisSite.baseRevisionNumber = site.base_revision_number;
+                thisSite.archiveLocation = site.archive_location;
+                onLoaded(thisSite);
+            } else {
+                console.log("could not find site")
+            }
         });
     }
 
