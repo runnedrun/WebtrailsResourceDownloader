@@ -21,7 +21,6 @@ function generateArchivePath(path, revisionNumber) {
 exports.resourceDownloader = function(req, res){
     console.log("in the resource downloader");
 
-    debugger;
     var auth_token = req.headers["wt_auth_token"] || req.cookies.wt_auth_token
 
     console.log("auth_token is: " + auth_token);
@@ -32,10 +31,12 @@ exports.resourceDownloader = function(req, res){
         var resp;
 
         if (req.body.html.awsPath){
+            // this is a request from the extension, which generates the aws url client side
             archiveBase = absoluteAwsUrl(req.body.html.awsPath)
             archivePath = generateArchivePath(req.body.html.awsPath, req.body.revision);
             resp = { archive_location: absoluteAwsUrl(archivePath)};
         } else {
+            // this is a request from the web site, which just uses aws url saved to the site.
             resp = {}
         }
 
@@ -133,9 +134,15 @@ ResourceHandler = function(req, site, archivePath, archiveBase) {
     console.log("archive location is: " + site.archiveLocation);
 
     if (archiveBase && archivePath){
+        // new site being saved for the first time
         site.archiveLocation = archiveBase
     } else {
-        archivePath = url.parse(site.archiveLocation).pathname.replace(/\/TrailsSitesProto(\/)?/,"") + "/" + revisionNumber;
+        // new note on an existing site
+
+        // remove the bucket from the url, and trim any trailing slashes
+        var trimmedPath =
+            url.parse(site.archiveLocation).pathname.replace(/\/TrailsSitesProto(\/)?/,"").replace(/\/+$/, "");
+        archivePath = trimmedPath + "/" + revisionNumber;
     }
 
     callbackTracker.setSaveHtmlFunction(function(callback) {

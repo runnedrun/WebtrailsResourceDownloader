@@ -3,7 +3,7 @@ useful commands:
 start supervisor in debug mode with port 5000: PORT=5000 supervisor --debug app.js
 debug: node debug --port=5858
 
-start foreman with devel env vars: foreman start -e .env,devel.env
+start foreman with devel env vars and debugging: foreman start -f Procfile.dev -e devel.env
 
 proc for node inspector:
 web: node-inspector & node --debug app.js
